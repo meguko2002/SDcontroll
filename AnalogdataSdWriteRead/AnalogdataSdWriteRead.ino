@@ -22,13 +22,20 @@
 
 #include <SPI.h>
 #include <SD.h>
-
+const int interruptPin = 2;
 const int chipSelect = 4;
-int sensorPin = A0;    // select the input pin for the potentiometer
-int ledPin = 5;     // select the pin for the LED
+const int sensorPin = A0;    // select the input pin for the potentiometer
+const int ledPin = 5;     // select the pin for the LED
+const int Read = 0;
+const int Write = 1;
+const int Wait = 2;
+volatile int SdState = Wait;
 
+File dataFile;
 
 void setup() {
+  pinMode(ledPin, OUTPUT);
+  pinMode(interruptPin, INPUT);
   Serial.begin(9600);
   Serial.print("Initializing SD card...");
   if (!SD.begin(chipSelect)) {
@@ -36,43 +43,67 @@ void setup() {
     return;
   }
   Serial.println("card initialized.");
-  SD.remove("datalog.txt");
-  pinMode(ledPin, OUTPUT);
+
+
+  attachInterrupt(digitalPinToInterrupt(interruptPin), swap, FALLING );
 }
 
-void loop() {
+void swap() {
+  if (SdState == Wait) {
+    SdState = Write;
+    sdwrite();
+  }
+  else if (SdState == Write) {
+    SdState = Read;
+    sdread();
+  }
+  else {
+    SdState = Wait;
+    dataFile.close();
+    Serial.println("save waiting");
+  }
+}
+
+void sdwrite() {
   int sensorValue = 0;  // variable to store the value coming from the sensor
   int outputValue = 0;        // value output to the PWM (analog out)
+  SD.remove("datalog.txt");
+  dataFile = SD.open("datalog.txt", FILE_WRITE);
+  Serial.println("save start");
 
-  File dataFile = SD.open("datalog.txt", FILE_WRITE);
   if (dataFile) {
-    for (int i = 0; i < 1000; i++) {
+    for (int i = 0; i< 1000; i++) {
       sensorValue = analogRead(sensorPin);
       outputValue = map(sensorValue, 0, 1023, 0, 255);
       analogWrite(ledPin, outputValue);
       dataFile.write(outputValue);
-
-      Serial.println(String(outputValue));
-      delay(10);
+      Serial.println(outputValue);
+delay(100);
     }
     dataFile.close();
+    Serial.println("save done");
   }
+  else     Serial.println("file not found");
+}
 
-  Serial.println("Read datalog.txt");
+
+void sdread() {
+  int outputValue = 0;
+  Serial.println("load start");
   dataFile = SD.open("datalog.txt");
   if (dataFile) {
     while (dataFile.available()) {
       outputValue = dataFile.read();
       analogWrite(ledPin, outputValue);
       Serial.println(outputValue);
-      delay(10);
     }
     dataFile.close();
+    Serial.println("load done");
   }
-  while (1) {}
 }
 
-
+void loop() {
+}
 
 
 
