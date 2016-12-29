@@ -30,6 +30,7 @@ const int Read = 0;
 const int Write = 1;
 const int Wait = 2;
 volatile int SdState = Wait;
+int Duration = 50;
 
 File dataFile;
 
@@ -43,25 +44,6 @@ void setup() {
     return;
   }
   Serial.println("card initialized.");
-
-
-  attachInterrupt(digitalPinToInterrupt(interruptPin), swap, FALLING );
-}
-
-void swap() {
-  if (SdState == Wait) {
-    SdState = Write;
-    sdwrite();
-  }
-  else if (SdState == Write) {
-    SdState = Read;
-    sdread();
-  }
-  else {
-    SdState = Wait;
-    dataFile.close();
-    Serial.println("save waiting");
-  }
 }
 
 void sdwrite() {
@@ -72,20 +54,19 @@ void sdwrite() {
   Serial.println("save start");
 
   if (dataFile) {
-    for (int i = 0; i< 1000; i++) {
+    for (int i = 0; i < 100; i++) {
       sensorValue = analogRead(sensorPin);
       outputValue = map(sensorValue, 0, 1023, 0, 255);
       analogWrite(ledPin, outputValue);
       dataFile.write(outputValue);
       Serial.println(outputValue);
-delay(100);
+      delay(Duration);
     }
     dataFile.close();
     Serial.println("save done");
   }
   else     Serial.println("file not found");
 }
-
 
 void sdread() {
   int outputValue = 0;
@@ -96,15 +77,38 @@ void sdread() {
       outputValue = dataFile.read();
       analogWrite(ledPin, outputValue);
       Serial.println(outputValue);
+      delay(Duration);
     }
     dataFile.close();
     Serial.println("load done");
   }
 }
 
-void loop() {
+void sdwait() {
+  dataFile.close();
+  Serial.println("waiting");
 }
 
+void loop() {
+  bool sw;
+  static bool pre = LOW;
+  sw = digitalRead(interruptPin);
+  if ((pre == LOW) & (sw == HIGH)) {
+    if (SdState == Wait) {
+      SdState = Write;
+      sdwrite();
+    }
+    else if (SdState == Write) {
+      SdState = Read;
+      sdread();
+    }
+    else {
+      SdState = Wait;
+      sdwait();
+    }
+  }
+  pre = sw;
+}
 
 
 
